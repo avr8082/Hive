@@ -1,0 +1,667 @@
+Data Analysis with Hive & Impala
+
+******************* HIVE ***********************************
+
+Hi 
+Main emphasis on HIVE DDL 
+
+RDBMS:
+In RDBMS can be read and update only using SQL. Internally will generate SQL and access the data (Select, update, delete, drop)
+Data and structure are tightly coupled
+DAO - Data Access Layer 
+
+You can dump the data into Hadoop and issue the SQL commands to get some analysis. Hive is SQL interface in Hadoop.
+You have the data in HDFS, for query, we need structure.Thats why Hive came into picture.
+In Prod, Hive queries can be submitted on gateway node.
+Typically hive installed on gateway node. When we install hive, install hive binaries and install hive metastore then set up config to access by Hadoop cluster.
+Hive metastore requires a database.
+
+
+
+spark-sql is discontinued in 1.3.0 & onwards
+
+scala> import org.apache.spark.sql.hive.HiveContext;
+scala> val hiveContext = new HiveContext(sc);
+scala> hiveContext.sql("select count(1) from order_items")
+
+Error:
+scala> hiveContext.sql("select count(1) from order_items")
+Guess Spark not reading Hive tables here.
+
+$ impala-shell
+[quickstart.cloudera:21000] > select count(1) from order_items;
+
+hive> show tables; 
+
+
+************* video 72 - DDL portion of Hive ******************
+The below 5 stages of Hive data flow:
+
+1. Create Databases (Hive) 
+2. Physical Data Modeling (Hive) 
+3. Extract & Loading data (sqoop/Java Map Reduce / Hive) 
+4. Transformations (Hive/Pig/Java Map Reduce)
+5. Defining Workflows (Oozie)
+
+Diff.with RDBMS:
+
+1. No support for real time indexes 
+no packages or procedures or functions 
+no triggers 
+no range partitioning
+limite data types
+recently added data type for time stamp 
+no data type for datatype
+
+
+
+
+
+# to find the hive default path
+$ cd /etc/hive/conf 
+view hive-site.xml 
+
+# hive default path = /user/hive/warehouse
+
+Create database for ODS 
+Create database for EDW 
+
+--create sample database 
+CREATE DATABASE IF NOT EXISTS cards;
+
+--by default as it is text file 
+CREATE TABLE deck_of_cards (
+COLOR string,
+SUIT string,
+PIP string,
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+
+--create ods and edw database for retail_db@mysql 
+hive> CREATE DATABASE IF NOT EXISTS retail_ods;
+hive> CREATE DATABASE retail_edw;
+
+--/user/hive/warehouse --> By default this is the base location for Hive databases
+--hive config files location  
+$ cd /etc/hive/config 
+$ ls -ltr 
+$ view hive-site.xml 
+and search for warehouse or 
+$ grep warehouse * 
+
+hive> dfs -ls /user/hive/warehouse
+# we can see retail_edw.db, retail_ods.db below:
+drwxrwxrwx   - cloudera supergroup          0 2016-10-26 04:16 /user/hive/warehouse/categories
+drwxrwxrwx   - cloudera supergroup          0 2016-10-28 00:03 /user/hive/warehouse/cca_demo
+drwxrwxrwx   - impala   supergroup          0 2016-10-28 00:25 /user/hive/warehouse/cca_impala_hive_demo
+drwxrwxrwx   - cloudera supergroup          0 2016-10-26 04:16 /user/hive/warehouse/customers
+drwxrwxrwx   - cloudera supergroup          0 2016-10-26 04:17 /user/hive/warehouse/departments
+drwxrwxrwx   - cloudera supergroup          0 2016-10-26 04:17 /user/hive/warehouse/order_items
+drwxrwxrwx   - cloudera supergroup          0 2016-10-26 04:18 /user/hive/warehouse/orders
+drwxrwxrwx   - cloudera supergroup          0 2016-10-26 04:18 /user/hive/warehouse/products
+drwxrwxrwx   - cloudera supergroup          0 2016-10-28 01:02 /user/hive/warehouse/retail_edw.db
+drwxrwxrwx   - cloudera supergroup          0 2016-10-28 01:02 /user/hive/warehouse/retail_ods.db
+
+--Hive Data types:
+Numeric (int, smallint,bigint, float)
+Char (string) 
+Binary(binary)
+complex(array,struct, map etc)
+
+
+
+In Hive all tables treated as external tables and define delimiters.
+
+--External table
+CREATE EXTERNAL TABLE deck_of_cards (
+COLOR string,
+SUIT string,
+PIP string,
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+LOCATION ' ';
+
+External & Managed tables in Hive 
+1. In create table syntax it self 
+2. when we drop the managed table, the location directory also dropped 
+
+Managed tables - no location (syntax differece)
+--Functional difference 
+if we drop MANAGED table, the directory also dropped (we can get the directory using describe formatted command)
+If EXTERNAL table dropped, the directory location may not be dropped. Only metadata in metastore will be deleted.
+
+If table is MANAGED table, if any changes on that table all the tools, users those are subscribe to used to those tools gets impacted.
+If table is EXTERNAL table, if any changes on that table all the tools, users those are subscribe to used to those tools NOT impacted
+
+If a table only wanted to use in HIVE, we can create MANAGED table
+
+
+CTAS - Create table as Select 
+Hive support views 
+
+--Physical Data Modeling :
+1.File formats
+2.Convert data types 
+3.Determine delimiter(Field and line delimiters) - line delimiter NEW LINE char by default 
+4.Determine formats for null values 
+5. Redundancy 
+6.Determine partitioning/bucketing strategy (no range partitioning in Hive)
+7. Too much partitioning vs. too little partitioning 
+Bucketing = Hash Partitioning 
+8. Facts
+9.Dimensions (Type 1,2,3 dimensions)
+10.Star Schema 
+11.Snowflake schema 
+12.rollup tables 
+13.report tables
+
+************* video 73 - DDL demo ******************
+
+from Github
+
+-- Create sample database
+-- CREATE DATABASE IF NOT EXISTS cards;
+
+CREATE TABLE deck_of_cards (
+COLOR string,
+SUIT string,
+PIP string)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+--Download deckofcards.txt into cloudera desktop and unzip from github repository www.github.com/dgadiraju/data
+--mkdir -p ~/demo/data/cards
+--copy file deckofcards.txt to ~/demo/data/cards
+~ = /home/cloudera/ 
+
+LOAD DATA LOCAL INPATH '/home/cloudera/demo/data/cards/deckofcards.txt' INTO TABLE deck_of_cards;
+
+
+CREATE EXTERNAL TABLE deck_of_cards_external (
+COLOR string,
+SUIT string,
+PIP string)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE
+LOCATION '/user/hive/warehouse/cards.db/deck_of_cards';
+
+--If we see deck_of_cards_external in HIVE, it is EXTERNAL table
+
+-- Create ods and edw database for retail_db@mysql
+-- CREATE DATABASE IF NOT EXISTS retail_ods;
+--Check the tables hive> dfs -ls /user/hive/warehouse/retail_ods.db;
+-- CREATE DATABASE retail_edw;
+-- CREATE DATABASE retail_stage;
+
+-- Create ods tables (mostly they will follow same structure, except additional audit columns)
+use retail_ods;
+
+CREATE TABLE categories (
+category_id int,
+category_department_id int,
+category_name string
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+CREATE TABLE customers (
+customer_id       int,
+customer_fname    string,
+customer_lname    string,
+customer_email    string,
+customer_password string,
+customer_street   string,
+customer_city     string,
+customer_state    string,
+customer_zipcode  string 
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+CREATE TABLE departments (
+department_id int,
+department_name string
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+CREATE TABLE orders (
+order_id int,
+order_date string,
+order_customer_id int,
+order_status string
+)
+PARTITIONED BY (order_month string)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+-- this is list partitioning in orders
+
+CREATE TABLE order_items (
+order_item_id int,
+order_item_order_id int,
+order_item_order_date string,
+order_item_product_id int,
+order_item_quantity smallint,
+order_item_subtotal float,
+order_item_product_price float
+)
+PARTITIONED BY (order_month string)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+--here, order_id_order_date is created for modeling purpose
+
+
+CREATE TABLE orders_bucket (
+order_id int,
+order_date string,
+order_customer_id int,
+order_status string
+)
+CLUSTERED BY (order_id) INTO 16 BUCKETS
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+
+CREATE TABLE order_items_bucket (
+order_item_id int,
+order_item_order_id int,
+order_item_order_date string,
+order_item_product_id int,
+order_item_quantity smallint,
+order_item_subtotal float,
+order_item_product_price float
+)
+CLUSTERED BY (order_item_order_id) INTO 16 BUCKETS
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+CREATE TABLE products (
+product_id int, 
+product_category_id int,
+product_name string,
+product_description string,
+product_price float,
+product_image string
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+-- Create edw tables (following dimension model)
+
+use retail_edw;
+
+CREATE TABLE products_dimension (
+product_id int,
+product_name string,
+product_description string,
+product_price float,
+product_category_name string,
+product_department_name string
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+CREATE TABLE order_fact (
+order_item_order_id int,
+order_item_order_date string,
+order_item_product_id int,
+order_item_quantity smallint,
+order_item_subtotal float,
+order_item_product_price float
+)
+PARTITIONED BY (product_category_department string)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+-- Create external tables for retail_stage
+use retail_stage;
+
+CREATE EXTERNAL TABLE categories
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/categories'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_categories.avsc');
+
+CREATE EXTERNAL TABLE customers
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/customers'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_customers.avsc');
+
+CREATE EXTERNAL TABLE departments
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/departments'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_departments.avsc');
+
+CREATE EXTERNAL TABLE orders
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/orders'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_orders.avsc');
+
+CREATE EXTERNAL TABLE order_items
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/order_items'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_order_items.avsc');
+
+CREATE EXTERNAL TABLE products
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/products'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_products.avsc');
+
+-- Latest syntax using stored as avro
+-- Run the sqoop import 
+sqoop import-all-tables \
+  -m 12 \
+  --connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+  --username=retail_dba \
+  --password=cloudera \
+  --as-avrodatafile \
+  --warehouse-dir=/user/hive/warehouse/retail_stage.db
+
+-- It will create directories under warehouse-dir and copy data to that location
+-- The command will also generate avsc files for each of the table with sqoop_import_<table_name>.avsc
+-- Create directory in hdfs /user/cloudera/retail_stage
+-- Copy all avsc files using hadoop fs -put /<path>/*.avsc /user/cloudera/retail_stage
+-- Now you can create table in retail_stage db for all the data you have copied
+
+use retail_stage;
+
+CREATE EXTERNAL TABLE categories
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/categories'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_categories.avsc');
+
+CREATE EXTERNAL TABLE customers
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/customers'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_customers.avsc');
+
+CREATE EXTERNAL TABLE departments
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/departments'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_departments.avsc');
+
+CREATE EXTERNAL TABLE orders
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/orders'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_orders.avsc');
+
+CREATE EXTERNAL TABLE order_items
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/order_items'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_order_items.avsc');
+
+CREATE EXTERNAL TABLE products
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/products'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/sqoop_import_products.avsc');
+
+CREATE TABLE orders_part_avro (
+order_id int,
+order_date bigint,
+order_customer_id int,
+order_status string
+)
+PARTITIONED BY (order_month string)
+STORED AS AVRO
+LOCATION 'hdfs:///user/hive/warehouse/retail_stage.db/orders_part_avro'
+TBLPROPERTIES ('avro.schema.url'='hdfs://quickstart.cloudera/user/cloudera/retail_stage/orders_part_avro.avsc');
+
+-- Adding partition manually
+alter table orders_part_avro add partition (order_month='2014-01');
+
+-- Inserting data to a partition
+insert into table orders_part_avro partition (order_month='2014-01')
+select * from orders where from_unixtime(cast(substr(order_date, 1, 10) as int)) like '2014-01%';
+
+-- Drop table and recreate to test dynamic insert
+-- Dynamic insert
+set hive.exec.dynamic.partition.mode=nonstrict;
+insert into table orders_part_avro partition (order_month)
+select order_id, order_date, order_customer_id, order_status,
+substr(from_unixtime(cast(substr(order_date, 1, 10) as int)), 1, 7) order_month from orders;
+
+--validate
+dfs -ls /user/hive/warehouse/retail_stage.db/orders_part_avro/*
+dfs -ls /user/hive/warehouse/retail_stage.db/orders_part_avro/
+
+CREATE TABLE departments_delta (
+department_id int,
+department_name string,
+update_date string
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'
+STORED AS TEXTFILE;
+
+******************** video 74 Extract and Load using Sqoop ********************
+
+*** Extract and Load data into Hadoop using PULL/PUSH/Filters as much as possible
+*** Get the data from disperate data sources into ODS with minimal transformations
+*** we can use sqoop, 
+
+OLTP --> we can use sqoop for Oracle, MySQL using PULL strategy. Sometimes it will be PUSH strategy also using custom MR programs or Hive 
+Closed Main Frames --> IBM
+XML - JSON format 
+
+
+Sqoopp --> to extract and load data from relational databases 
+Hive --> to load data (already extracted) from flat files into HDFS 
+Java Map Reduce --> to extend the capabilities of load process 
+Flume --> to extract and load data from web logs 
+
+
+--About Sqoop
+Sqoop Import 
+Sqoop Export 
+Sqoop Eval
+Sqoop List
+
+Sqoop Architecture 
+Sqoop2 Architecture 
+Sqoop Import 
+Sqoop Export 
+Sqoop Considerations 
+
+Sqoop Architecture:
+
+1. Data Load tool (both in and out)
+2. Written in Hava and Open Source 
+3. Uses JDBC for DB connectivity 
+4. Use Map Reduce framework 
+
+--Sqoop is bunch of jar files 
+--Sqoop follows MAP only job NO REDUCE jobs in Sqoop 
+--Command Line only
+--Not secure 
+--No client-server 
+--not easily extensible and no separation of duties 
+
+Sqoop components
+Sqoop 
+Databases 
+Hadoop 
+
+Sqoop2 Architecture:
+
+Review the video again 
+
+**************  Video 75 - Extracting & Loading data using Sqoop ****************
+
+***Sqoop Import***
+
+import
+import all tables 
+
+Common arguments 
+Import arguments 
+
+--split-by
+split-by used when no primary key in the table
+without split-by or primary key, it does not know how to split the data so sqoop import fail.So, it will ask to use num mappers 1
+
+By default sqoop uses comma(,) as delimiter
+# remove departments table if any already in HIVE 
+
+$ sqoop import \
+  --connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+  --username=retail_dba \
+  --password=cloudera \
+  --table departments \
+  --target-dir /user/hive/warehouse/retail_ods.db/departments \
+  --append \
+  --fields-terminated-by '|' \
+  --lines-terminated-by '\n' \
+  --num-mappers 1 \
+  --outdir java_files 
+
+--outdir java_file : this job writter java files which outdir java_file arugument copy the java code as POJO(plain old java object) into java_files folder.If you open 
+that file departments.java file, we can seee POJO objects and DBWritable objects and other classes implemented and relevant methods.This java pgm compiled into jar file and that jar file is compiled into MR framework to actually submit the job to copy the data from source to target into Hadoop
+
+$ sqoop import \
+  --connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+  --username=retail_dba \
+  --password=cloudera \
+  --table departments \
+  --target-dir /user/hive/warehouse/retail_ods.db/departments \
+  --append \
+  --fields-terminated-by '|' \
+  --lines-terminated-by '\n' \
+  --split-by departments_id \
+  --outdir java_files 
+
+# split-by department_id or any other column preferably INDEXED column incase table doesn't exist PRIMARY KEY column
+
+
+$ sqoop import \
+  --connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+  --username=retail_dba \
+  --password=cloudera \
+  --table departments \
+  --target-dir /user/hive/warehouse/retail_ods.db/departments \
+  --append \
+  --fields-terminated-by '|' \
+  --lines-terminated-by '\n' \
+  --split-by departments_id \
+  --where "department_id > 7" \
+  --outdir java_files 
+
+# the below script load the data gain using hive arguments
+# Hive is nothing but a logical file system on top of Hadoop 
+# Earlier script is based on source system based like where clause , lines terminated by, fileds terminated by etc
+# Below script is target based arguments which is Hive
+$whoami 
+
+# hive-overwrite 
+$ sqoop import \
+  --connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+  --username=retail_dba \
+  --password=cloudera \
+  --table departments \
+  --fields-terminated-by '|' \
+  --lines-terminated-by '\n' \
+  --hive-home /user/hive/warehouse \
+  --hive-import \
+  --hive-overwrite \
+  --hive-table retail_ods.departments \
+  --outdir java_files
+
+
+# hive-table into default database NOT in retail_ods database
+$ sqoop import \
+  --connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+  --username=retail_dba \
+  --password=cloudera \
+  --table departments \
+  --fields-terminated-by '|' \
+  --lines-terminated-by '\n' \
+  --hive-home /user/hive/warehouse \
+  --hive-import \
+  --hive-table departments_test \
+  --create-hive-table \
+  --outdir java_files
+
+
+**************  Video 76 - sqoop export  ****************
+
+Demo - Data loading using PUSH strategy 
+
+1. Mission critical OLTP databases to target Hadoop based systems
+2. Closed mainframes systems to target Hadoop based systems in the form of delimited text files
+3. 3rd party applications to target Hadoop based systems JSON, XML, delimited text files etc
+
+# Hive is known as schema on read as there are no checks on runtime.
+If we use describe formatted command, we will see properties of the file which we need to follow. If we put some junk data, it will load the data without any checks.
+that is why Hive is schema on read.
+# RDBMS is schema on write
+
+
+Hive LOAD command:
+ 1. Files needs to be copied should be of the same type as tables' storage type specified in STORED AS clause
+     - Text data (STORED AS TEXTFILE)
+     - Sequence file data (STORED AS SEQUENCEFILE)
+     - Field and line delimiters also should be consisten
+
+ 2. LOAD will use file system APIs to copy files from localfiles/HDFS to HDFS 
+ 3. LOAD does not use Map Reduce to get data into HDFS
+
+Syntax:
+LOAD DATA [LOCAL] INPATH 'filepath' [OVERWRITE] INTO TABLE tablename [PARTITION (partcol1=val1,partcol2=val2,...)]
+
+LOCAL = to copy from local file system to HDFS referred by hive table 
+OVERWRTIE = old data will be lost 
+PARTITION = copy data to specified partition 
+
+Ex: LOAD DATA LOCAL INPATH '/home/cloudera/test.txt' OVERWRITE INTO TABLE test;
+
+LOAD demo:
+1. create a test table in hadoop and enter some text
+$vi test.txt 
+
+2. Login to Hive
+3. Create a table in hive using create table test (t string);
+4. LOAD DATA LOCAL INPATH '/home/cloudera/test.txt' OVERWRITE INTO TABLE test;
+Result : data will be loaded from Hadoop local path to test table in Hive 
+
+
+**************  Video 77 - sqoop export  ****************
+
+Sqoop is not a solution for each and every data source .Sqoop use PULL strategy but lot of resouces consumed.
+Hive use PUSH strategy 
+
+Hive LOAD demo:
+ * Hive LOAD command is used to copy data from localfile/HDFS into HDFS used by Hive tables
+ * Copying data from local file system to Hive tables
+ * Copying data from HDFS location to Hive tables
+ * Overwrite existing data 
+ * Append to existing data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
